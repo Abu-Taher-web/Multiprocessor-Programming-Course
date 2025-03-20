@@ -1,0 +1,32 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+	  {
+		"type": "cppbuild",
+		"label": "C/C++: g++.exe build active file",
+		"command": "C:\\VSARM\\mingw\\mingw64\\bin\\g++.exe",
+		"args": [
+		  "-fdiagnostics-color=always",
+		  "-g",
+		  "-DCL_TARGET_OPENCL_VERSION=220", // Define OpenCL version
+		  "${file}", // The active file being compiled
+		  "-o",
+		  "${fileDirname}\\${fileBasenameNoExtension}.exe", // Output executable
+		  "-I", "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.6\\include", // Include path for OpenCL headers
+		  "-L", "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.6\\lib\\x64", // Library path for OpenCL
+		  "-lOpenCL" // Link against the OpenCL library
+		],
+		"options": {
+		  "cwd": "${fileDirname}"
+		},
+		"problemMatcher": [
+		  "$gcc"
+		],
+		"group": {
+		  "kind": "build",
+		  "isDefault": true
+		},
+		"detail": "compiler: C:\\VSARM\\mingw\\mingw64\\bin\\g++.exe"
+	  }
+	]
+  }
