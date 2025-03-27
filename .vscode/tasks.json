@@ -10,6 +10,7 @@
 		  "-g",
 		  "-DCL_TARGET_OPENCL_VERSION=220", // Define OpenCL version
 		  "${file}", // The active file being compiled
+		  //"lodepng.cpp",
 		  "-o",
 		  "${fileDirname}\\${fileBasenameNoExtension}.exe", // Output executable
 		  "-I", "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.6\\include", // Include path for OpenCL headers
