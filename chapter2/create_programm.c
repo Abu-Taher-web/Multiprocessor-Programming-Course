@@ -124,6 +124,9 @@ int main(){
     cl_uint address_bits0;
     cl_bool available0;
     cl_bool compiler0;
+    cl_uint align0;
+    cl_bool image_support;
+
     clGetDeviceInfo(devs[0], CL_DEVICE_NAME, sizeof(device_name0), &device_name0, NULL);
     clGetDeviceInfo(devs[0], CL_PLATFORM_VENDOR, sizeof(device_vendor_name0), &device_vendor_name0, NULL);
     clGetDeviceInfo(devs[0], CL_DEVICE_EXTENSIONS, sizeof(device_extension0), &device_extension0, NULL);
@@ -131,6 +134,8 @@ int main(){
     clGetDeviceInfo(devs[0], CL_DEVICE_ADDRESS_BITS, sizeof(address_bits0), &address_bits0, NULL);
     clGetDeviceInfo(devs[0], CL_DEVICE_AVAILABLE, sizeof(available0), &available0, NULL);
     clGetDeviceInfo(devs[0], CL_DEVICE_COMPILER_AVAILABLE, sizeof(compiler0), &compiler0, NULL);
+    clGetDeviceInfo(devs[0], CL_DEVICE_MEM_BASE_ADDR_ALIGN, sizeof(align0), &align0, NULL);
+    clGetDeviceInfo(devs[0], CL_DEVICE_IMAGE_SUPPORT, sizeof(image_support), &image_support, NULL);
 
     printf("\nPlatform 0 - Device - 0: (GPU) information\n");
     printf("device_name0:%s\n",device_name0);
@@ -140,6 +145,9 @@ int main(){
     printf("address_bits0:%d\n",address_bits0);
     printf("available0:%d\n",available0);
     printf("compiler0:%d\n",compiler0);
+    printf("Required alignment: %u bytes\n", align0);
+    printf("Image support: %d \n", image_support);
+
     free(devs);
     
     // Device info for Intel GPU in Platform 1
@@ -153,6 +161,7 @@ cl_ulong mem_size1;
 cl_uint address_bits1;
 cl_bool available1;
 cl_bool compiler1;
+cl_uint align1;
 
 clGetDeviceInfo(devs1[0], CL_DEVICE_NAME, sizeof(device_name1), &device_name1, NULL);
 clGetDeviceInfo(devs1[0], CL_DEVICE_VENDOR, sizeof(device_vendor_name1), &device_vendor_name1, NULL);
@@ -161,6 +170,7 @@ clGetDeviceInfo(devs1[0], CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(mem_size1), &mem_siz
 clGetDeviceInfo(devs1[0], CL_DEVICE_ADDRESS_BITS, sizeof(address_bits1), &address_bits1, NULL);
 clGetDeviceInfo(devs1[0], CL_DEVICE_AVAILABLE, sizeof(available1), &available1, NULL);
 clGetDeviceInfo(devs1[0], CL_DEVICE_COMPILER_AVAILABLE, sizeof(compiler1), &compiler1, NULL);
+clGetDeviceInfo(devs1[0], CL_DEVICE_MEM_BASE_ADDR_ALIGN, sizeof(align1), &align1, NULL);
 
 printf("\nPlatform 1 - Device - 0: (GPU) information\n");
 printf("device_name1:%s\n", device_name1);
@@ -170,6 +180,7 @@ printf("mem_size1:%llu\n", mem_size1/ (1024 * 1024 * 1024));
 printf("address_bits1:%u\n", address_bits1);
 printf("available1:%d\n", available1);
 printf("compiler1:%d\n", compiler1);
+printf("Required alignment: %u bytes\n", align1);
 
 free(devs1);  // Free allocated memory
 
@@ -246,7 +257,7 @@ free(devs1);  // Free allocated memory
         clGetProgramBuildInfo(program, platform0_gpu, CL_PROGRAM_BUILD_LOG, sizeof(build_log), build_log, NULL);
         printf("Build error:\n%s\n", build_log);
     }
-    printf("Build error: %d", builderror);
+    printf("Build error: %d\n", builderror);
 
     // First, get the source size
 size_t source_size;
@@ -256,7 +267,7 @@ cl_int program_info_err = clGetProgramInfo(program, CL_PROGRAM_SOURCE, 0, NULL, 
 char *source = (char*)malloc(source_size);
 program_info_err = clGetProgramInfo(program, CL_PROGRAM_SOURCE, source_size, source, NULL);
 
-printf("\nKernel source:\n%s\n", source);
+printf("\nLine 259: Kernel source:\n%s\n", source);
 free(source);
 
     
