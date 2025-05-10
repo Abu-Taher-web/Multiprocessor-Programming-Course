@@ -1,0 +1,161 @@
+I have two images a left image, 'im0.png' and a right image 'im1.png'. My final goal is to implement stereo disparity algorithm, which uses ZNCC (Zero mean normalized cross correlation) in OpenCL C language. 
+
+These images are RGBA color images 2940 width and 2016 height. 
+
+I want to implement the whole thing in step by step manner. before implementing zncc, cross check and occlusion filling functions,
+I want to print all the platform and device information that is provided by the runtime.
+For the device the following information are the most important. 
+
+o CL_DEVICE_LOCAL_MEM_TYPE  
+o CL_DEVICE_LOCAL_MEM_SIZE  
+o CL_DEVICE_MAX_COMPUTE_UNITS  
+o CL_DEVICE_MAX_CLOCK_FREQUENCY  
+o CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE  
+o CL_DEVICE_MAX_WORK_GROUP_SIZE  
+o CL_DEVICE_MAX_WORK_ITEM_SIZES 
+
+So, define a C function to print the information about the platform and device. 
+
+For now load the images from the file, send them to the device. Define and use resize() kernel that convert the (2940, 2016) image to (735, 504) size color RGBA image.
+Transfer the resized image from the device to the host memory and save it. 
+
+Then define another kernel conver_rgba_to_gra() for converting the RGBA image into gray scale image using  Y=0.2126R + 0.7152G + 0.0722B. Transfer the converted image from the device to the host memory and save it. 
+
+I want to put this kernel in a separate file with .cl extension. I want to profile the data transfer and kernel execution time. 
+
+For encoding and decoding images use loadpng. 
+
+Follow the style of the following coding. I took it from book's source code called 'opencl in action'. 
+I like the below coding because it is easy to read and understand how the author is doing one step after another. We can see that the author created create_device(), build_program() very professionally.
+/* Find a GPU or CPU associated with the first available platform */
+cl_device_id create_device() {
+
+   cl_platform_id platform;
+   cl_device_id dev;
+   int err;
+
+   /* Identify a platform */
+   err = clGetPlatformIDs(1, &platform, NULL);
+   if(err < 0) {
+      perror("Couldn't identify a platform");
+      exit(1);
+   } 
+
+   /* Access a device */
+   err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &dev, NULL);
+   if(err == CL_DEVICE_NOT_FOUND) {
+      err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 1, &dev, NULL);
+   }
+   if(err < 0) {
+      perror("Couldn't access any devices");
+      exit(1);   
+   }
+
+   return dev;
+}
+
+/* Create program from a file and compile it */
+cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename) {
+
+   cl_program program;
+   FILE *program_handle;
+   char *program_buffer, *program_log;
+   size_t program_size, log_size;
+   int err;
+   char arg[20];
+
+   /* Read program file and place content into buffer */
+   program_handle = fopen(filename, "r");
+   if(program_handle == NULL) {
+      perror("Couldn't find the program file");
+      exit(1);
+   }
+   fseek(program_handle, 0, SEEK_END);
+   program_size = ftell(program_handle);
+   rewind(program_handle);
+   program_buffer = (char*)malloc(program_size + 1);
+   program_buffer[program_size] = '\0';
+   fread(program_buffer, sizeof(char), program_size, program_handle);
+   fclose(program_handle);
+
+   /* Create program from file */
+   program = clCreateProgramWithSource(ctx, 1, 
+      (const char**)&program_buffer, &program_size, &err);
+   if(err < 0) {
+      perror("Couldn't create the program");
+      exit(1);
+   }
+   free(program_buffer);
+
+   /* Create build argument */
+   sprintf(arg, "-DSCALE=%u", SCALE_FACTOR);
+
+   /* Build program */
+   err = clBuildProgram(program, 0, NULL, arg, NULL, NULL);
+   if(err < 0) {
+
+      /* Find size of log and print to std output */
+      clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, 
+            0, NULL, &log_size);
+      program_log = (char*) malloc(log_size + 1);
+      program_log[log_size] = '\0';
+      clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, 
+            log_size + 1, program_log, NULL);
+      printf("%s\n", program_log);
+      free(program_log);
+      exit(1);
+   }
+
+   return program;
+}
+
+After completing this we will move to create a few other kernel such as zncc(), cross_check() and occlusion_filling().
+
+I want to create a kernel zncc_left_to_right() which compare left image with right image. A pixel from left image is compared with all the leftward pixel in the right image.
+
+Another kernel zncc_right_to_left() which compare right image with the left image. In this case a pixel from the right image is compared with all the rightward pixel in the left image.
+
+For both of these maximum disparity is 65. When writing zncc functions use necessary helper function. I want to test wheter helper function works or not.
+
+
+
+The cross_check() function compare the left_disparity with the right_disparity. It will use threshold 8. If an pixel from both images have difference above the threshold then we will put 0 otherwise the value will be taken from the left image.
+
+For the occlusion_filling() we will use interpolation method to fill the pixel that contains o values.
+
+for occlusion filling you can use the following example.
+
+__kernel void occlusion(__global uchar* map, __global uchar* result, uint w, uint h, uint nsize, int imsize) {
+    const int i = get_global_id(0);
+    const int j = get_global_id(1);
+    int i_b, j_b; // Indices within the block
+    int ind_neib; // Index in the nighbourhood
+    int ext;
+    bool stop; // Stop flag for nearest neighbor interpolation
+
+    // If the value of the pixel is zero, perform the occlusion filling by nearest neighbour interpolation
+    result[i*w+j] = map[i*w+j];
+    if(map[i*w+j] == 0) {
+         // Spreading search of non-zero pixel in the neighborhood i,j
+        stop = false;
+        for (ext=1; (ext <= nsize/2) && (!stop); ext++) {
+            for (j_b = -ext; (j_b <= ext) && (!stop); j_b++) {
+                for (i_b = -ext; (i_b <= ext) && (!stop); i_b++) {
+                    // Cehcking borders
+                    if (!(i+i_b >= 0) || !(i+i_b < h) || !(j+j_b >= 0) || !(j+j_b < w) || (i_b==0 && j_b==0)) {
+                        continue;
+                    }
+                     // Calculatiing indices of the block within the whole image
+                    ind_neib = (i+i_b)*w + (j+j_b);
+                    //If we meet a nonzero pixel, we interpolate and quit from this loop
+                    if(map[ind_neib] != 0) {
+                        result[i*w+j] = map[ind_neib];
+                        stop = true;
+                        break;
+                    }
+                        
+                }
+            }
+        }
+    }   
+    }

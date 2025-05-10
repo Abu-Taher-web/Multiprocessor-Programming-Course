@@ -11,7 +11,8 @@ int main(){
     cl_uint num_platforms;
     cl_int x = clGetPlatformIDs(5, NULL, &num_platforms);
     platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id)*num_platforms);
-    clGetPlatformIDs(num_platforms, platforms, NULL);
+    
+    cl_uint err = clGetPlatformIDs(num_platforms, platforms, NULL);
 
 
 

@@ -170,8 +170,11 @@ int main() {
     lodepng_encode_file("depthmap.png", output, WIDTH, HEIGHT, LCT_GREY, 8);
     
     // Cleanup
-    free(left_gray); free(right_gray);
-    free(disp_left); free(disp_right); free(disp_final);
+    free(left_gray); 
+    free(right_gray);
+    free(disp_left); 
+    free(disp_right); 
+    free(disp_final);
     free(output);
     
     printf("Execution time: %.2fs\n", (double)(clock() - start) / CLOCKS_PER_SEC);
