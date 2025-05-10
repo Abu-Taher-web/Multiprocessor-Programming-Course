@@ -278,22 +278,20 @@ int main(){
 
 
     /*.................Disparity calculation using ZNCC.............*/
-    cl_program zncc_prog_left = build_program(context, device, "zncc_left_optimized.cl", "-cl-fast-relaxed-math -cl-mad-enable");
-    cl_program zncc_prog_right = build_program(context, device, "zncc_right_optimized.cl", "-cl-fast-relaxed-math -cl-mad-enable");
+
+    cl_program zncc_prog_left = build_program(context, device, "zncc_left_register_usage_reduction.cl", "-cl-fast-relaxed-math -cl-mad-enable");
+    cl_program zncc_prog_right = build_program(context, device, "zncc_right.cl", "-cl-fast-relaxed-math -cl-mad-enable");
     cl_kernel zncc_left_to_right_kernel = clCreateKernel(zncc_prog_left, "zncc_disparity_left", NULL);
     cl_kernel zncc_right_to_left_kernel = clCreateKernel(zncc_prog_right, "zncc_disparity_right", NULL);
+
+
+
 
 
     cl_mem disparity_left_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, WIDTH*HEIGHT, NULL, NULL);
     cl_mem disparity_right_buf = clCreateBuffer(context, CL_MEM_WRITE_ONLY, WIDTH*HEIGHT, NULL, NULL);
     size_t global_size_zncc[2] = {WIDTH, HEIGHT};
     cl_event zncc_events[2];
-    size_t local_size[2] = {16, 16}; // Optimal for most GPUs
-    size_t global_size[2] = {
-        ((WIDTH + local_size[0]-1)/local_size[0])*local_size[0],
-        ((HEIGHT + local_size[1]-1)/local_size[1])*local_size[1]
-    };
-
 
     clSetKernelArg(zncc_left_to_right_kernel, 0, sizeof(cl_mem), &gray_left_buf);
     clSetKernelArg(zncc_left_to_right_kernel, 1, sizeof(cl_mem), &gray_right_buf);
@@ -302,7 +300,7 @@ int main(){
     clSetKernelArg(zncc_left_to_right_kernel, 4, sizeof(int), &HEIGHT);
     clSetKernelArg(zncc_left_to_right_kernel, 5, sizeof(int), &MAX_DISP);
     clSetKernelArg(zncc_left_to_right_kernel, 6, sizeof(int), &WINDOW_SIZE);
-    clEnqueueNDRangeKernel(queue, zncc_left_to_right_kernel, 2, NULL, global_size, local_size, 0, NULL, &zncc_events[0]);
+    clEnqueueNDRangeKernel(queue, zncc_left_to_right_kernel, 2, NULL, global_size_zncc, NULL, 0, NULL, &zncc_events[0]);
 
     clSetKernelArg(zncc_right_to_left_kernel, 0, sizeof(cl_mem), &gray_right_buf);
     clSetKernelArg(zncc_right_to_left_kernel, 1, sizeof(cl_mem), &gray_left_buf);
@@ -311,7 +309,7 @@ int main(){
     clSetKernelArg(zncc_right_to_left_kernel, 4, sizeof(int), &HEIGHT);
     clSetKernelArg(zncc_right_to_left_kernel, 5, sizeof(int), &MAX_DISP);
     clSetKernelArg(zncc_right_to_left_kernel, 6, sizeof(int), &WINDOW_SIZE);
-    clEnqueueNDRangeKernel(queue, zncc_right_to_left_kernel, 2, NULL, global_size, local_size, 0, NULL, &zncc_events[1]);
+    clEnqueueNDRangeKernel(queue, zncc_right_to_left_kernel, 2, NULL, global_size_zncc, NULL, 0, NULL, &zncc_events[1]);
 
     // Read disparity map
     unsigned char *disparity_left_img = (unsigned char*)malloc(WIDTH * HEIGHT);
@@ -326,14 +324,12 @@ int main(){
 
 
 
-
     /*....................Cross checking of left and right disparity image........*/
     cl_program cross_check_prog = build_program(context, device, "cross_check.cl", NULL);
     cl_kernel cross_check_kernel = clCreateKernel(cross_check_prog, "cross_check", NULL);
     cl_mem cross_checked_buff = clCreateBuffer(context, CL_MEM_WRITE_ONLY, WIDTH*HEIGHT, NULL, NULL);
     size_t global_size_cross[2] = {WIDTH, HEIGHT};
     cl_event cross_check_kernel_event;
-
 
     clSetKernelArg(cross_check_kernel, 0, sizeof(cl_mem), &disparity_left_buf);
     clSetKernelArg(cross_check_kernel, 1, sizeof(cl_mem), &disparity_right_buf);
@@ -342,14 +338,12 @@ int main(){
     clSetKernelArg(cross_check_kernel, 4, sizeof(int), &THRESHOLD);
     clEnqueueNDRangeKernel(queue, cross_check_kernel, 2, NULL, global_size_cross, NULL, 2, zncc_events, &cross_check_kernel_event);
 
-
 // Read final disparity
 unsigned char *cross_checked_img = (unsigned char*)malloc(WIDTH * HEIGHT);
 cl_event read_cross_checked_buff_event;
 clEnqueueReadBuffer(queue, cross_checked_buff, CL_TRUE, 0, WIDTH*HEIGHT, cross_checked_img, 1, &cross_check_kernel_event, &read_cross_checked_buff_event);
 lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_GREY, 8);
     /*.....................End of Crosse checking.................................*/
-
 
 
 
