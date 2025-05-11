@@ -66,41 +66,50 @@ __kernel void zncc_disparity_right(
     float max_zncc = -INFINITY;
     int best_d = 0;
     const int num_pixels = (2*WINDOW_SIZE+1)*(2*WINDOW_SIZE+1);
+    const float inv_n = 1.0f / num_pixels;
+
+    // Precompute right window sums once
+    float sum_R = 0.0f, sum_R2 = 0.0f;
+    #pragma unroll
+    for(int wy = -WINDOW_SIZE; wy <= WINDOW_SIZE; ++wy) {
+        #pragma unroll
+        for(int wx = -WINDOW_SIZE; wx <= WINDOW_SIZE; ++wx) {
+            const int rt_x = local_x + WINDOW_SIZE + wx;
+            const int rt_y = local_y + WINDOW_SIZE + wy;
+            const uchar r = right_tile[rt_y][rt_x];
+            sum_R += r;
+            sum_R2 += r * r;
+        }
+    }
+    const float var_R = sum_R2 - (sum_R * sum_R) * inv_n;
 
     // Main disparity search loop with early termination
     for(int d = 0; d < MAX_DISP; ++d) {
         if(x + d + WINDOW_SIZE >= width) break;
 
-        float sum_R = 0.0f, sum_L = 0.0f;
-        float sum_LR = 0.0f, sum_R2 = 0.0f, sum_L2 = 0.0f;
-
-        // Fully unrolled 9x9 window processing
+        float sum_L = 0.0f, sum_LR = 0.0f, sum_L2 = 0.0f;
         #pragma unroll
         for(int wy = -WINDOW_SIZE; wy <= WINDOW_SIZE; ++wy) {
             #pragma unroll
             for(int wx = -WINDOW_SIZE; wx <= WINDOW_SIZE; ++wx) {
-                // Local memory access with reduced indexing
                 const int rt_x = local_x + WINDOW_SIZE + wx;
                 const int rt_y = local_y + WINDOW_SIZE + wy;
                 const uchar r = right_tile[rt_y][rt_x];
-
+                
                 const int lt_x = local_x + WINDOW_SIZE + wx + d;
                 const int lt_y = local_y + WINDOW_SIZE + wy;
                 const uchar l = left_tile[lt_y][lt_x];
-
-                sum_R += r;
+                
                 sum_L += l;
                 sum_LR += r * l;
-                sum_R2 += r * r;
                 sum_L2 += l * l;
             }
         }
 
-        // Register-optimized ZNCC calculation
-        const float inv_n = 1.0f / num_pixels;
-        const float cov = sum_LR - (sum_R * sum_L) * inv_n;
-        const float var_R = sum_R2 - sum_R * sum_R * inv_n;
-        const float var_L = sum_L2 - sum_L * sum_L * inv_n;
+        // Compute ZNCC using precomputed var_R
+        const float mean_L = sum_L * inv_n;
+        const float cov = sum_LR - sum_R * mean_L;
+        const float var_L = sum_L2 - (sum_L * sum_L) * inv_n;
         const float zncc = cov * rsqrt(var_R * var_L + 1e-8f);
 
         if(zncc > max_zncc) {

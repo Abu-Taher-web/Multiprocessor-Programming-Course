@@ -236,8 +236,8 @@ int main(){
     clEnqueueReadBuffer(queue, resized_left_buf, CL_TRUE, 0, WIDTH*HEIGHT*4, resized_left_img, 0, NULL, &read_resize_events[0]);
     clEnqueueReadBuffer(queue, resized_right_buf, CL_TRUE, 0, WIDTH*HEIGHT*4, resized_right_img, 0, NULL, &read_resize_events[1]);
     
-    lodepng_encode32_file("resized_left.png", resized_left_img, WIDTH, HEIGHT);
-    lodepng_encode32_file("resized_right.png", resized_right_img, WIDTH, HEIGHT);
+    lodepng_encode32_file("output/resized_left.png", resized_left_img, WIDTH, HEIGHT);
+    lodepng_encode32_file("output/resized_right.png", resized_right_img, WIDTH, HEIGHT);
 
 
 
@@ -268,8 +268,8 @@ int main(){
 
     clEnqueueReadBuffer(queue, gray_left_buf, CL_TRUE, 0, WIDTH*HEIGHT, gray_left_img, 0, NULL, &read_gray_events[0]);
     clEnqueueReadBuffer(queue, gray_right_buf, CL_TRUE, 0, WIDTH*HEIGHT, gray_right_img, 0, NULL, &read_gray_events[1]);
-    lodepng_encode_file("gray_left.png", gray_left_img, WIDTH, HEIGHT, LCT_GREY, 8);
-    lodepng_encode_file("gray_right.png", gray_right_img, WIDTH, HEIGHT, LCT_GREY, 8);
+    lodepng_encode_file("output/gray_left.png", gray_left_img, WIDTH, HEIGHT, LCT_GREY, 8);
+    lodepng_encode_file("output/gray_right.png", gray_right_img, WIDTH, HEIGHT, LCT_GREY, 8);
     
     /*..........End of RGBA to grayscale conversion..........*/
 
@@ -312,8 +312,8 @@ int main(){
     cl_event read_disparity_events[2];
     clEnqueueReadBuffer(queue, disparity_left_buf, CL_TRUE, 0, WIDTH*HEIGHT, disparity_left_img, 0, NULL, &read_disparity_events[0]);
     clEnqueueReadBuffer(queue, disparity_right_buf, CL_TRUE, 0, WIDTH*HEIGHT, disparity_right_img, 0, NULL, &read_disparity_events[1]);
-    lodepng_encode_file("disparity_left.png", disparity_left_img, WIDTH, HEIGHT, LCT_GREY, 8);
-    lodepng_encode_file("disparity_right.png", disparity_right_img, WIDTH, HEIGHT, LCT_GREY, 8);
+    lodepng_encode_file("output/disparity_left.png", disparity_left_img, WIDTH, HEIGHT, LCT_GREY, 8);
+    lodepng_encode_file("output/disparity_right.png", disparity_right_img, WIDTH, HEIGHT, LCT_GREY, 8);
 
     /*.................End of disparity calculation using ZNCC.............*/
 
@@ -337,7 +337,7 @@ int main(){
 unsigned char *cross_checked_img = (unsigned char*)malloc(WIDTH * HEIGHT);
 cl_event read_cross_checked_buff_event;
 clEnqueueReadBuffer(queue, cross_checked_buff, CL_TRUE, 0, WIDTH*HEIGHT, cross_checked_img, 1, &cross_check_kernel_event, &read_cross_checked_buff_event);
-lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_GREY, 8);
+lodepng_encode_file("output/cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_GREY, 8);
     /*.....................End of Crosse checking.................................*/
 
 
@@ -367,22 +367,15 @@ lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_G
     
     
     // Normalize occlusion image from [0-64] to [0-255]
-    
-    normalize_occlusion(occlusion_img, WIDTH, HEIGHT);
-    /*
-    for (int i = 0; i < WIDTH*HEIGHT; i++)
-    {
-        if (0 <= occlusion_img[i] && occlusion_img[i]<= 50)
-        {
-            occlusion_img[i] = 80;
-        }
-        
-    }
-    */
 
-    lodepng_encode_file("occlusion_filled.png", occlusion_img, WIDTH, HEIGHT, LCT_GREY, 8);
+    normalize_occlusion(occlusion_img, WIDTH, HEIGHT);
+
+    lodepng_encode_file("output/occlusion_filled.png", occlusion_img, WIDTH, HEIGHT, LCT_GREY, 8);
 
     /*...........END OF Occlusion Fill....................................................*/
+
+
+
 
 
     /*...........................Apply moving average filter to the normalized depth map............*/
@@ -404,12 +397,9 @@ lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_G
     cl_event read_filter_event;
     
     clEnqueueReadBuffer(queue, filtered_occlusion_buff, CL_TRUE, 0, WIDTH*HEIGHT, filtered_img, 1, &filter_event, &read_filter_event);
-    for (int i = 0; i < WIDTH * HEIGHT; i++) {
-        // Scale with rounding to nearest integer
-        filtered_img[i] = (unsigned char)((filtered_img[i] * 255) / MAX_DISP);
-    }
-
-    lodepng_encode_file("filtered_occlusion.png", filtered_img, WIDTH, HEIGHT, LCT_GREY, 8);
+    
+    normalize_occlusion(filtered_img, WIDTH, HEIGHT);
+    lodepng_encode_file("output/filtered_occlusion.png", filtered_img, WIDTH, HEIGHT, LCT_GREY, 8);
     /*...........................END of Applying moving average filter to the normalized depth map............*/
 
 
@@ -428,14 +418,18 @@ lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_G
     print_profiling_info("Right image grayscale conversion", gray_events[1]);
     print_profiling_info("Device to Host transfer time for left grascale image", read_gray_events[0]);
     print_profiling_info("Device to Host transfer time for right grayscale image", read_gray_events[1]);
+    printf("\n");
     print_profiling_info("Left disparity calculation: Left -> Right", zncc_events[0]);
     print_profiling_info("Right disparity calculation: Right -> Left", zncc_events[1]);
+    printf("\n");
     print_profiling_info("Device to Host transfer time for left disparity", read_disparity_events[0]);
     print_profiling_info("Device to Host transfer time for right disparity", read_disparity_events[1]);
     print_profiling_info("Cross checked kernel execution time", cross_check_kernel_event);
     print_profiling_info("Device to Host transfer time for cross checked image", read_cross_checked_buff_event);
     print_profiling_info("Occlusion kernel execution time", occlusion_kernel_event);
     print_profiling_info("Device to Host transfer time for occlusion filled image", read_occlusion_event);
+    print_profiling_info("Moving average filter kernel execution time", filter_event);
+    print_profiling_info("Device to Host transfer time for filtered image", read_filter_event);
 
 
 
@@ -455,6 +449,7 @@ lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_G
     clReleaseMemObject(disparity_right_buf);
     clReleaseMemObject(cross_checked_buff);
     clReleaseMemObject(occlusion_buff);
+    clReleaseMemObject(filtered_occlusion_buff);
 
 
     clReleaseKernel(resize_kernel);
@@ -463,6 +458,7 @@ lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_G
     clReleaseKernel(zncc_right_to_left_kernel);
     clReleaseKernel(cross_check_kernel);
     clReleaseKernel(occlusion_kernel);
+    clReleaseKernel(filter_kernel);
 
 
     clReleaseProgram(resize_prog);
@@ -471,6 +467,7 @@ lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_G
     clReleaseProgram(zncc_prog_right);
     clReleaseProgram(cross_check_prog);
     clReleaseProgram(occlusion_prog);
+    clReleaseProgram(filter_prog);
 
 
     free(im0_data);
@@ -486,6 +483,7 @@ lodepng_encode_file("cross_checked.png", cross_checked_img, WIDTH, HEIGHT, LCT_G
     free(disparity_right_img);
     free(cross_checked_img);
     free(occlusion_img);
+    free(filtered_img);
 
     return 0;
 }

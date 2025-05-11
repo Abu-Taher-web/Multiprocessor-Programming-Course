@@ -2,6 +2,8 @@
 #define MAX_DISP 65         // Maximum disparity, adjust based on requirements
 #define LOCAL_WIDTH 16      // Workgroup width (adjust for your hardware)
 #define LOCAL_HEIGHT 16     // Workgroup height
+#define NUM_PIXELS 81       // (2*WINDOW_SIZE+1)^2 = 9x9
+#define INV_N 0.012345679f  // 1.0/NUM_PIXELS
 
 __kernel void zncc_disparity_left(
     __global const uchar* left,
@@ -63,43 +65,49 @@ __kernel void zncc_disparity_left(
         return;
     }
 
+    // Precompute left window statistics in private memory
+    float sum_L = 0.0f, sum_L2 = 0.0f;
+    #pragma unroll
+    for(int wy = -WINDOW_SIZE; wy <= WINDOW_SIZE; ++wy) {
+        #pragma unroll
+        for(int wx = -WINDOW_SIZE; wx <= WINDOW_SIZE; ++wx) {
+            const int lx = local_x + WINDOW_SIZE + wx;
+            const int ly = local_y + WINDOW_SIZE + wy;
+            const uchar l = left_tile[ly][lx];
+            sum_L += l;
+            sum_L2 += l * l;
+        }
+    }
+    const float var_L = sum_L2 - (sum_L * sum_L) * INV_N;
+
     float max_zncc = -INFINITY;
     int best_d = 0;
-    const int num_pixels = (2*WINDOW_SIZE+1)*(2*WINDOW_SIZE+1);
 
-    // Main disparity search loop
+    // Main disparity search loop with optimized computations
     for(int d = 0; d < MAX_DISP; ++d) {
         if(x - d < 0) break;  // Early termination
 
-        float sum_L = 0.0f, sum_R = 0.0f;
-        float sum_LR = 0.0f, sum_L2 = 0.0f, sum_R2 = 0.0f;
-
-        // Fully unrolled 9x9 window processing
+        float sum_R = 0.0f, sum_LR = 0.0f, sum_R2 = 0.0f;
         #pragma unroll
         for(int wy = -WINDOW_SIZE; wy <= WINDOW_SIZE; ++wy) {
             #pragma unroll
             for(int wx = -WINDOW_SIZE; wx <= WINDOW_SIZE; ++wx) {
-                // Local memory access with reduced indexing
                 const int lx = local_x + WINDOW_SIZE + wx;
                 const int ly = local_y + WINDOW_SIZE + wy;
                 
                 const uchar l = left_tile[ly][lx];
                 const uchar r = right_tile[ly][lx + MAX_DISP - d];
 
-                sum_L += l;
                 sum_R += r;
                 sum_LR += l * r;
-                sum_L2 += l * l;
                 sum_R2 += r * r;
             }
         }
 
-        // Register-optimized ZNCC calculation
-        const float inv_n = 1.0f / num_pixels;
-        const float cov = sum_LR - (sum_L * sum_R) * inv_n;
-        const float var_L = sum_L2 - sum_L * sum_L * inv_n;
-        const float var_R = sum_R2 - sum_R * sum_R * inv_n;
-        const float zncc = cov * rsqrt(var_L * var_R + 1e-8f);
+        // Optimized ZNCC calculation using precomputed values
+        const float cov = sum_LR - sum_L * sum_R * INV_N;
+        const float var_R = sum_R2 - (sum_R * sum_R) * INV_N;
+        const float zncc = cov * native_rsqrt(var_L * var_R + 1e-8f);
 
         if(zncc > max_zncc) {
             max_zncc = zncc;
