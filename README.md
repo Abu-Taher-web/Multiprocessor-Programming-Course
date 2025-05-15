@@ -1,6 +1,6 @@
 <div align="center">  
   <h1 align="center">  
-    <img src="Report and Figures/combined_depth_map.png" alt="App Icon" width="400">  
+    <img src="Report and Figures/combined_depth_map2.png" alt="App Icon" width="500">  
     <br>ZNCC Algorithm-Based Stereo Disparity Computation Using OpenCL
   </h1>  
 
