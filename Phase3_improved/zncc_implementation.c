@@ -4,9 +4,9 @@
 #include <time.h>
 #include "lodepng.h"
 
-#define MAX_DISP 32
+#define MAX_DISP 65
 #define WINDOW_SIZE 4
-#define THRESHOLD 8
+#define THRESHOLD 2
 
 const unsigned ORIG_WIDTH = 2940;
 const unsigned ORIG_HEIGHT = 2016;
@@ -285,6 +285,8 @@ float* occlusion_fill(float *disp) {
 
     return filled;
 }
+
+
 
 float* weighted_median_filter(float *disp, int window_radius) {
     float *filtered = (float*)malloc(WIDTH * HEIGHT * sizeof(float));

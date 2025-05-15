@@ -5,8 +5,8 @@
 
 const unsigned MAX_DISP = 65;
 const unsigned WINDOW_SIZE = 4;
-const unsigned THRESHOLD = 8;
-const unsigned MAX_SEARCH_RADIUS = 2;
+const unsigned THRESHOLD = 2;
+const unsigned MAX_SEARCH_RADIUS = 200;
 
 const unsigned ORIG_WIDTH = 2940;
 const unsigned ORIG_HEIGHT = 2016;
@@ -24,6 +24,17 @@ void print_platform_and_device_info() {
         char platform_name[128];
         clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, 128, platform_name, NULL);
         printf("Platform %u: %s\n", i, platform_name);
+        char platform_info[1024];
+        
+        // Platform
+        clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(platform_info), platform_info, NULL);
+        printf("=== Platform %u ===\nName: %s\n", i, platform_info);
+        
+        clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, sizeof(platform_info), platform_info, NULL);
+        printf("Vendor: %s\n", platform_info);
+        
+        clGetPlatformInfo(platforms[i], CL_PLATFORM_VERSION, sizeof(platform_info), platform_info, NULL);
+        printf("Version: %s\n", platform_info);
 
         cl_uint num_devices;
         clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);

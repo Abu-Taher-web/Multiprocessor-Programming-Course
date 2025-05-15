@@ -7,7 +7,7 @@
 
 #define MAX_DISP 65
 #define WINDOW_SIZE 4
-#define THRESHOLD 8
+#define THRESHOLD 2
 
 const unsigned ORIG_WIDTH = 2940;
 const unsigned ORIG_HEIGHT = 2016;
@@ -17,36 +17,30 @@ const unsigned HEIGHT = 504;
 unsigned char *left_gray, *right_gray;
 float *disp_left, *disp_right, *disp_final;
 
-
-#define MAX_PROFILE_ENTRIES  20
-typedef struct TimingProfile{
+typedef struct {
     const char* name;
     double time;
 } TimingProfile;
 
+#define MAX_PROFILE_ENTRIES 20
 TimingProfile timings[MAX_PROFILE_ENTRIES];
-double starts[MAX_PROFILE_ENTRIES];
 int profile_count = 0;
 
 void start_timer(const char* name) {
-    if (profile_count >= MAX_PROFILE_ENTRIES) return;
     timings[profile_count].name = name;
-    starts[profile_count] = omp_get_wtime();
+    timings[profile_count].time = clock();
 }
 
 void end_timer() {
-    if (profile_count >= MAX_PROFILE_ENTRIES) return;
-    double end = omp_get_wtime();
-    timings[profile_count].time = end - starts[profile_count];
+    timings[profile_count].time = 
+        (double)(clock() - timings[profile_count].time) / CLOCKS_PER_SEC;
     profile_count++;
 }
 
 void print_timings() {
     printf("\n--- Performance Profile ---\n");
     for(int i = 0; i < profile_count; i++) {
-        printf("%-25s: %7.3f s\n",
-               timings[i].name,
-               timings[i].time);
+        printf("%-25s: %7.3f s\n", timings[i].name, timings[i].time);
     }
 }
 
@@ -65,7 +59,6 @@ unsigned char* load_image(const char *filename) {
 
 unsigned char* resize_image(unsigned char *original_rgba) {
     unsigned char *resized_rgba = (unsigned char*)malloc(WIDTH * HEIGHT * 4);
-    #pragma omp parallel for
     for (unsigned y = 0; y < HEIGHT; y++) {
         for (unsigned x = 0; x < WIDTH; x++) {
             unsigned orig_x = x * 4;
@@ -80,7 +73,6 @@ unsigned char* resize_image(unsigned char *original_rgba) {
 
 unsigned char* convert_rgba_to_gray(unsigned char *rgba_image) {
     unsigned char *gray_image = (unsigned char*)malloc(WIDTH * HEIGHT);
-    #pragma omp parallel for
     for (unsigned y = 0; y < HEIGHT; y++) {
         for (unsigned x = 0; x < WIDTH; x++) {
             unsigned idx = (y * WIDTH + x) * 4;
@@ -102,7 +94,6 @@ void save_image(const char *filename, unsigned char *gray_image) {
 
 void save_float_disparity(const char *filename, float *disp) {
     unsigned char *disp_img = (unsigned char*)malloc(WIDTH * HEIGHT);
-    #pragma omp parallel for
     for(int i = 0; i < WIDTH * HEIGHT; i++) {
         disp_img[i] = (unsigned char)fmin(255, fmax(0, (disp[i] / MAX_DISP) * 255));
     }
@@ -129,7 +120,6 @@ float compute_mean(unsigned char *img, int x, int y) {
 float compute_zncc_left_to_right(unsigned char *left, unsigned char *right, 
                   int x, int y, int d, float mean_l, float mean_r) {
     float numerator = 0.0f, denom_l = 0.0f, denom_r = 0.0f;
-    
     for(int dy = -WINDOW_SIZE; dy <= WINDOW_SIZE; dy++) {
         for(int dx = -WINDOW_SIZE; dx <= WINDOW_SIZE; dx++) {
             int nx = x + dx;
@@ -228,7 +218,6 @@ void compute_disparity_map_right_to_left(unsigned char *right, unsigned char *le
 
 float* cross_check(float *disp_left, float *disp_right) {
     float *disp_final = (float*)malloc(WIDTH * HEIGHT * sizeof(float));
-    #pragma omp parallel for
     for(int y = 0; y < HEIGHT; y++) {
         for(int x = 0; x < WIDTH; x++) {
             int d = disp_left[y * WIDTH + x];
@@ -247,12 +236,12 @@ float* cross_check(float *disp_left, float *disp_right) {
     return disp_final;
 }
 
+
 float* occlusion_fill(float *disp) {
     float *filled = (float*)malloc(WIDTH * HEIGHT * sizeof(float));
     memcpy(filled, disp, WIDTH * HEIGHT * sizeof(float));
 
     // Horizontal passes
-    #pragma omp parallel for
     for(int y = 0; y < HEIGHT; y++) {
         float last_valid = 0;
         // Left to right
@@ -275,7 +264,6 @@ float* occlusion_fill(float *disp) {
     }
 
     // Vertical passes
-    #pragma omp parallel for
     for(int x = 0; x < WIDTH; x++) {
         float last_valid = 0;
         // Top to bottom
@@ -300,11 +288,14 @@ float* occlusion_fill(float *disp) {
     return filled;
 }
 
+
+
 float* weighted_median_filter(float *disp, int window_radius) {
     float *filtered = (float*)malloc(WIDTH * HEIGHT * sizeof(float));
     int window_size = 2 * window_radius + 1;
     int total_weights = window_size * window_size;
 
+    // Gaussian weights (example weights, can be adjusted)
     float weights[5][5] = {
         {1, 4, 6, 4, 1},
         {4, 16, 24, 16, 4},
@@ -313,7 +304,6 @@ float* weighted_median_filter(float *disp, int window_radius) {
         {1, 4, 6, 4, 1}
     };
 
-    #pragma omp parallel for
     for(int y = 0; y < HEIGHT; y++) {
         for(int x = 0; x < WIDTH; x++) {
             float window_values[25];
@@ -332,6 +322,7 @@ float* weighted_median_filter(float *disp, int window_radius) {
                 }
             }
 
+            // Sort values and compute weighted median
             float total_weight = 0;
             for(int i = 0; i < count; i++) total_weight += window_weights[i];
             float half_weight = total_weight / 2;
@@ -346,6 +337,7 @@ float* weighted_median_filter(float *disp, int window_radius) {
                 }
             }
 
+            // Sort the values (simple bubble sort for example)
             for(int i = 0; i < count - 1; i++) {
                 for(int j = i + 1; j < count; j++) {
                     if(window_values[j] < window_values[i]) {
@@ -366,6 +358,8 @@ float* weighted_median_filter(float *disp, int window_radius) {
     return filtered;
 }
 
+
+
 float* moving_average_filter_float(float* input) {
     float* output = (float*)malloc(WIDTH * HEIGHT * sizeof(float));
     if (!output) {
@@ -373,12 +367,12 @@ float* moving_average_filter_float(float* input) {
         exit(1);
     }
 
-    #pragma omp parallel for
     for (unsigned y = 0; y < HEIGHT; y++) {
         for (unsigned x = 0; x < WIDTH; x++) {
             float sum = 0.0f;
             int count = 0;
 
+            // 5x5 window (radius = 2)
             for (int dy = -2; dy <= 2; dy++) {
                 for (int dx = -2; dx <= 2; dx++) {
                     int nx = x + dx;
@@ -391,12 +385,13 @@ float* moving_average_filter_float(float* input) {
                 }
             }
 
-            output[y * WIDTH + x] = sum / count;
+            output[y * WIDTH + x] = sum / count; // Store as float
         }
     }
 
     return output;
 }
+
 
 int main() {
     clock_t total_start = clock();
@@ -439,6 +434,7 @@ int main() {
     save_image("right_gray.png", right_gray);
     end_timer();
 
+    // Free intermediate buffers
     free(original_left);
     free(resized_left_rgba);
     free(original_right);
@@ -461,14 +457,14 @@ int main() {
     // Post-processing
     start_timer("Cross-check");
     float *cross_checked = cross_check(disp_left, disp_right);
-    //free(disp_final);
+    free(disp_final); // Free the initial malloc
     disp_final = cross_checked;
     save_float_disparity("cross_checked.png", disp_final);
     end_timer();
 
     start_timer("Occlusion fill");
     float *occlusion_filled = occlusion_fill(disp_final);
-    //free(disp_final);
+    free(disp_final); // Free cross_checked
     disp_final = occlusion_filled;
     save_float_disparity("occlusion_filled.png", disp_final);
     end_timer();
@@ -480,14 +476,14 @@ int main() {
 
     start_timer("Weighted median filter");
     float *median_filtered = weighted_median_filter(disp_final, 3);
-    //free(disp_final);
+    free(disp_final); // Free occlusion_filled
     disp_final = median_filtered;
     save_float_disparity("occlusion_filled_filtered.png", disp_final);
     end_timer();
 
-    print_timings();
+    
 
-
+    // Cleanup
     free(left_gray);
     free(right_gray);
     free(disp_left);
@@ -495,6 +491,8 @@ int main() {
     free(disp_final);
     free(filtered_disp);
 
+    // Print timings
+    print_timings();
     printf("\nTotal execution time: %.3f s\n", 
         (double)(clock() - total_start)/CLOCKS_PER_SEC);
 
